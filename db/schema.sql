@@ -1,11 +1,6 @@
 -- SAP Expense Journal Entry System — MySQL schema
--- Run once: mysql -u root -p expense_app < db/schema.sql
-
-CREATE DATABASE IF NOT EXISTS expense_app
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
-
-USE expense_app;
+-- Docker: auto-applied via docker-entrypoint-initdb.d
+-- Manual: mysql -u root -p expense_app < db/schema.sql
 
 CREATE TABLE IF NOT EXISTS expense_entries (
     id                   INT UNSIGNED      NOT NULL AUTO_INCREMENT,

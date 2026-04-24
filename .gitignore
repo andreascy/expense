@@ -13,3 +13,6 @@ uploads/*
 
 # PHP logs
 *.log
+
+# Docker
+.env

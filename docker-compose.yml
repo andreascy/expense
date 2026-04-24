@@ -1,0 +1,57 @@
+services:
+
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      SAP_BASE_URL:   ${SAP_BASE_URL:-http://sap-mock:50001/b1s/v1}
+      SAP_COMPANY_DB: ${SAP_COMPANY_DB:-MOCK}
+      SAP_USERNAME:   ${SAP_USERNAME:-manager}
+      SAP_PASSWORD:   ${SAP_PASSWORD:-manager}
+      SAP_VERIFY_SSL: ${SAP_VERIFY_SSL:-false}
+      DB_DRIVER:      mysql
+      DB_HOST:        db
+      DB_NAME:        expense_app
+      DB_USER:        expense_user
+      DB_PASSWORD:    expense_pass
+      APP_CURRENCY:   ${APP_CURRENCY:-EUR}
+      APP_VAT_RATE:   ${APP_VAT_RATE:-19}
+      APP_COMPANY:    ${APP_COMPANY:-My Company}
+    depends_on:
+      db:
+        condition: service_healthy
+      sap-mock:
+        condition: service_started
+    volumes:
+      - uploads:/var/www/html/uploads
+    restart: unless-stopped
+
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE:      expense_app
+      MYSQL_USER:          expense_user
+      MYSQL_PASSWORD:      expense_pass
+      MYSQL_ROOT_PASSWORD: rootpass
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "expense_user", "-pexpense_pass", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  sap-mock:
+    image: php:8.2-cli
+    working_dir: /app
+    volumes:
+      - ./mock:/app/mock:ro
+    command: php -S 0.0.0.0:50001 mock/sap_mock.php
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  uploads:
