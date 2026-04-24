@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# ─── SAP Expense Entry System — zero-dependency local launcher ───────────────
-# Requirements: PHP 8+ (php -S)  — no MySQL, no Docker needed
+# SAP Expense Entry System — local / Codespaces launcher
 set -euo pipefail
 
 APP_PORT=8000
@@ -15,12 +14,11 @@ die()   { echo -e "${RED}[fail]${NC}  $*"; exit 1; }
 
 cd "$SCRIPT_DIR"
 
-# ─── 1. PHP check ─────────────────────────────────────────────────────────────
 command -v php >/dev/null || die "PHP not found. Install php-cli."
 ok "PHP: $(php --version | head -1)"
 
-# ─── 2. Write local env (SQLite, no MySQL needed) ─────────────────────────────
 mkdir -p config db uploads
+
 cat > config/.env.local <<EOF
 SAP_BASE_URL=http://localhost:${MOCK_PORT}/b1s/v1
 SAP_COMPANY_DB=MOCK
@@ -32,37 +30,47 @@ APP_CURRENCY=EUR
 APP_VAT_RATE=19
 APP_COMPANY=Demo Company
 EOF
-ok "Config written (SQLite, SAP mock on :${MOCK_PORT})"
+ok "Config written (SQLite + SAP mock)"
 
-# ─── 3. Kill any stale processes on our ports ─────────────────────────────────
-for PORT in $APP_PORT $MOCK_PORT; do
-    PID=$(lsof -ti ":${PORT}" 2>/dev/null || true)
-    [ -n "$PID" ] && { warn "Killing stale process on :${PORT} (PID $PID)"; kill "$PID" 2>/dev/null || true; sleep 0.5; }
-done
+# Kill anything already on our ports (lsof or fuser fallback)
+kill_port() {
+    local PORT=$1
+    local PID
+    if command -v lsof >/dev/null 2>&1; then
+        PID=$(lsof -ti ":${PORT}" 2>/dev/null || true)
+    elif command -v fuser >/dev/null 2>&1; then
+        PID=$(fuser "${PORT}/tcp" 2>/dev/null | tr -d ' ' || true)
+    fi
+    if [ -n "${PID:-}" ]; then
+        warn "Killing stale process on :${PORT} (PID $PID)"
+        kill "$PID" 2>/dev/null || true
+        sleep 0.5
+    fi
+}
+kill_port "$APP_PORT"
+kill_port "$MOCK_PORT"
 
-# ─── 4. Start SAP B1 mock ─────────────────────────────────────────────────────
 info "Starting SAP B1 mock on :${MOCK_PORT}…"
-php -S "localhost:${MOCK_PORT}" mock/sap_mock.php >/tmp/sap_mock.log 2>&1 &
+php -S "0.0.0.0:${MOCK_PORT}" mock/sap_mock.php >/tmp/sap_mock.log 2>&1 &
 MOCK_PID=$!
 sleep 1
-kill -0 "$MOCK_PID" 2>/dev/null || die "SAP mock failed. See /tmp/sap_mock.log"
+kill -0 "$MOCK_PID" 2>/dev/null || { warn "SAP mock failed:"; cat /tmp/sap_mock.log; die "Mock server did not start."; }
 ok "SAP mock running (PID $MOCK_PID)"
 
-# ─── 5. Print summary and start app server ────────────────────────────────────
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  Expense Entry System is ready!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  ${CYAN}http://localhost:${APP_PORT}${NC}   ← open this in your browser"
+echo -e "  Local :  ${CYAN}http://localhost:${APP_PORT}${NC}"
+echo -e "  CS    :  Check the ${YELLOW}Ports tab${NC} in Codespaces → forward port ${APP_PORT} → set to Public"
 echo ""
-echo -e "  SAP mock  : http://localhost:${MOCK_PORT}/b1s/v1"
-echo -e "  Database  : db/expense_app.sqlite  (auto-created)"
-echo -e "  Receipts  : uploads/"
+echo -e "  Default login: ${YELLOW}admin@company.com${NC} / ${YELLOW}admin123${NC}"
 echo ""
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop."
 echo ""
 
 trap 'echo ""; info "Stopping…"; kill '"$MOCK_PID"' 2>/dev/null; exit 0' INT TERM
 
-php -S "localhost:${APP_PORT}" -t "$SCRIPT_DIR" "$SCRIPT_DIR/router.php"
+# Bind to 0.0.0.0 so Codespaces port forwarding works
+php -S "0.0.0.0:${APP_PORT}" -t "$SCRIPT_DIR" "$SCRIPT_DIR/router.php"
