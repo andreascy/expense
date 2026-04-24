@@ -1,0 +1,14 @@
+Options -Indexes
+
+# Protect config and includes from direct access
+<FilesMatch "^(config|includes)/">
+    Require all denied
+</FilesMatch>
+
+<Files ".env*">
+    Require all denied
+</Files>
+
+# PHP session security
+php_value session.cookie_httponly 1
+php_value session.use_strict_mode 1
