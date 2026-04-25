@@ -19,13 +19,34 @@ $path   = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $path = preg_replace('#^/b1s/v1#', '', $path);
 
 // ─── Route ────────────────────────────────────────────────────────────────────
+// Parameterized PATCH: /Items('CODE')
+$isPatchItem = $method === 'PATCH' && preg_match("#^/Items\('([^']+)'\)#", $path);
+
 match (true) {
-    $method === 'POST' && $path === '/Login'                    => handleLogin(),
-    $method === 'POST' && $path === '/Logout'                   => handleLogout(),
-    $method === 'GET'  && str_starts_with($path, '/ChartOfAccounts')    => handleAccounts(),
-    $method === 'POST' && $path === '/JournalEntries'           => handleJournalEntry(),
-    $method === 'GET'  && str_starts_with($path, '/BusinessPartners')   => handleBusinessPartners(),
-    $method === 'GET'  && str_starts_with($path, '/JournalEntryLines')  => handleJournalEntryLines(),
+    $method === 'POST' && $path === '/Login'                              => handleLogin(),
+    $method === 'POST' && $path === '/Logout'                            => handleLogout(),
+    $method === 'GET'  && str_starts_with($path, '/ChartOfAccounts')     => handleAccounts(),
+    $method === 'POST' && $path === '/JournalEntries'                    => handleJournalEntry(),
+    $method === 'GET'  && str_starts_with($path, '/BusinessPartners')    => handleBusinessPartners(),
+    $method === 'GET'  && str_starts_with($path, '/JournalEntryLines')   => handleJournalEntryLines(),
+    // Sales documents
+    $method === 'GET'  && str_starts_with($path, '/Quotations')          => handleSalesDoc('Quotation'),
+    $method === 'POST' && $path === '/Quotations'                        => handleSalesDoc('Quotation'),
+    $method === 'GET'  && str_starts_with($path, '/Orders')              => handleSalesDoc('Order'),
+    $method === 'POST' && $path === '/Orders'                            => handleSalesDoc('Order'),
+    $method === 'GET'  && str_starts_with($path, '/Invoices')            => handleSalesDoc('Invoice'),
+    $method === 'POST' && $path === '/Invoices'                          => handleSalesDoc('Invoice'),
+    // Payments
+    $method === 'GET'  && str_starts_with($path, '/IncomingPayments')    => handleIncomingPayments(),
+    $method === 'POST' && $path === '/IncomingPayments'                  => handleIncomingPayments(),
+    // Items
+    $method === 'GET'  && str_starts_with($path, '/Items')               => handleItems(),
+    $method === 'POST' && $path === '/Items'                             => handleItems(),
+    (bool)$isPatchItem                                                   => handleItemPatch(),
+    // Inventory
+    $method === 'GET'  && str_starts_with($path, '/ItemWarehouseInfoCollection') => handleStockLevels(),
+    $method === 'POST' && $path === '/InventoryGenEntries'               => handleInventoryMovement('receipt'),
+    $method === 'POST' && $path === '/InventoryGenExits'                 => handleInventoryMovement('issue'),
     default => notFound($method, $path),
 };
 
@@ -115,6 +136,119 @@ function handleJournalEntry(): void
         'ReferenceDate' => $body['ReferenceDate'] ?? date('Y-m-d'),
         'JournalEntryLines' => $body['JournalEntryLines'],
     ]);
+}
+
+// ── Sales Documents (Quotations / Orders / Invoices) ─────────────────────────
+function handleSalesDoc(string $type): void
+{
+    static $counters = ['Quotation' => 500, 'Order' => 600, 'Invoice' => 700];
+    $method = $_SERVER['REQUEST_METHOD'];
+
+    if ($method === 'GET') {
+        echo json_encode(['value' => []]);
+        return;
+    }
+
+    // POST — create
+    $body = json_decode(file_get_contents('php://input'), true);
+    if (empty($body['CardCode'])) {
+        http_response_code(400);
+        echo json_encode(['error'=>['message'=>['value'=>'CardCode is required']]]);
+        return;
+    }
+    $counters[$type]++;
+    $num = $counters[$type];
+    $de  = $num + 10000;
+    http_response_code(201);
+    echo json_encode([
+        'DocEntry'      => $de,
+        'DocNum'        => $num,
+        'CardCode'      => $body['CardCode'],
+        'DocDate'       => $body['DocDate']  ?? date('Y-m-d'),
+        'DocDueDate'    => $body['DocDueDate'] ?? date('Y-m-d', strtotime('+30 days')),
+        'Comments'      => $body['Comments'] ?? '',
+        'DocumentLines' => $body['DocumentLines'] ?? [],
+    ]);
+}
+
+// ── Incoming Payments ─────────────────────────────────────────────────────────
+function handleIncomingPayments(): void
+{
+    static $counter = 800;
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') { echo json_encode(['value' => []]); return; }
+    $body = json_decode(file_get_contents('php://input'), true);
+    if (empty($body['CardCode'])) {
+        http_response_code(400); echo json_encode(['error'=>['message'=>['value'=>'CardCode is required']]]); return;
+    }
+    $counter++;
+    http_response_code(201);
+    echo json_encode([
+        'DocEntry' => $counter + 20000,
+        'DocNum'   => $counter,
+        'CardCode' => $body['CardCode'],
+        'DocDate'  => $body['DocDate'] ?? date('Y-m-d'),
+    ]);
+}
+
+// ── Items ─────────────────────────────────────────────────────────────────────
+function handleItems(): void
+{
+    $method = $_SERVER['REQUEST_METHOD'];
+    if ($method === 'GET') {
+        $search = strtolower($_GET['$filter'] ?? '');
+        preg_match("/tolower\('([^']+)'\)/", $search, $m);
+        $term  = strtolower($m[1] ?? '');
+        $items = mockItems();
+        if ($term !== '') {
+            $items = array_filter($items, fn($i) =>
+                str_contains(strtolower($i['ItemCode']), $term) ||
+                str_contains(strtolower($i['ItemName']), $term));
+        }
+        $top = (int)($_GET['$top'] ?? 60);
+        echo json_encode(['value' => array_values(array_slice($items, 0, $top))]);
+        return;
+    }
+    // POST — create
+    static $counter = 0;
+    $counter++;
+    $body = json_decode(file_get_contents('php://input'), true);
+    http_response_code(201);
+    echo json_encode(['ItemCode' => $body['ItemCode'] ?? 'ITM' . str_pad($counter, 3, '0', STR_PAD_LEFT), 'ItemName' => $body['ItemName'] ?? '']);
+}
+
+function handleItemPatch(): void
+{
+    http_response_code(204);
+}
+
+// ── Inventory stock levels ────────────────────────────────────────────────────
+function handleStockLevels(): void
+{
+    $search = strtolower($_GET['$filter'] ?? '');
+    preg_match("/tolower\('([^']+)'\)/", $search, $m);
+    $term   = strtolower($m[1] ?? '');
+    $top    = (int)($_GET['$top'] ?? 50);
+
+    $stock = mockStockLevels();
+    if ($term !== '') {
+        $stock = array_filter($stock, fn($r) =>
+            str_contains(strtolower($r['ItemCode']), $term) ||
+            str_contains(strtolower($r['ItemName']), $term));
+    }
+    echo json_encode(['value' => array_values(array_slice($stock, 0, $top))]);
+}
+
+// ── Inventory movements ───────────────────────────────────────────────────────
+function handleInventoryMovement(string $type): void
+{
+    static $counters = ['receipt' => 900, 'issue' => 950];
+    $body = json_decode(file_get_contents('php://input'), true);
+    if (empty($body['DocumentLines'])) {
+        http_response_code(400); echo json_encode(['error'=>['message'=>['value'=>'DocumentLines required']]]); return;
+    }
+    $counters[$type]++;
+    http_response_code(201);
+    echo json_encode(['DocEntry' => $counters[$type] + 30000, 'DocNum' => $counters[$type]]);
 }
 
 function handleBusinessPartners(): void
@@ -251,4 +385,63 @@ function mockAccounts(): array
         ['Code' => '1000', 'Name' => 'Accounts Receivable',   'AccountType' => 'at_Assets',   'Balance' => 0],
         ['Code' => '2000', 'Name' => 'Accounts Payable',      'AccountType' => 'at_Liabilities', 'Balance' => 0],
     ];
+}
+
+function mockItems(): array
+{
+    return [
+        ['ItemCode'=>'LPT001','ItemName'=>'Laptop Pro 15"',       'ItemType'=>'itItems', 'OnHand'=>45, 'ItemPrices'=>[['Price'=>1299.00]]],
+        ['ItemCode'=>'LPT002','ItemName'=>'Laptop Business 13"',  'ItemType'=>'itItems', 'OnHand'=>12, 'ItemPrices'=>[['Price'=>899.00]]],
+        ['ItemCode'=>'MON001','ItemName'=>'Monitor 27" 4K',       'ItemType'=>'itItems', 'OnHand'=>30, 'ItemPrices'=>[['Price'=>349.00]]],
+        ['ItemCode'=>'KEY001','ItemName'=>'Wireless Keyboard',    'ItemType'=>'itItems', 'OnHand'=>80, 'ItemPrices'=>[['Price'=>79.99]]],
+        ['ItemCode'=>'MSE001','ItemName'=>'Wireless Mouse',       'ItemType'=>'itItems', 'OnHand'=>65, 'ItemPrices'=>[['Price'=>49.99]]],
+        ['ItemCode'=>'PRN001','ItemName'=>'Laser Printer A4',     'ItemType'=>'itItems', 'OnHand'=>8,  'ItemPrices'=>[['Price'=>249.00]]],
+        ['ItemCode'=>'SWT001','ItemName'=>'Network Switch 24-port','ItemType'=>'itItems', 'OnHand'=>5, 'ItemPrices'=>[['Price'=>189.00]]],
+        ['ItemCode'=>'CAB001','ItemName'=>'USB-C Cable 2m',       'ItemType'=>'itItems', 'OnHand'=>200,'ItemPrices'=>[['Price'=>14.99]]],
+        ['ItemCode'=>'HDK001','ItemName'=>'External HDD 2TB',     'ItemType'=>'itItems', 'OnHand'=>22, 'ItemPrices'=>[['Price'=>89.00]]],
+        ['ItemCode'=>'WEB001','ItemName'=>'Webcam 4K',            'ItemType'=>'itItems', 'OnHand'=>0,  'ItemPrices'=>[['Price'=>129.00]]],
+        ['ItemCode'=>'SVC001','ItemName'=>'IT Support (hourly)',  'ItemType'=>'itLabor', 'OnHand'=>0,  'ItemPrices'=>[['Price'=>95.00]]],
+        ['ItemCode'=>'SVC002','ItemName'=>'Network Setup',        'ItemType'=>'itLabor', 'OnHand'=>0,  'ItemPrices'=>[['Price'=>350.00]]],
+        ['ItemCode'=>'SVC003','ItemName'=>'Software Installation','ItemType'=>'itLabor', 'OnHand'=>0,  'ItemPrices'=>[['Price'=>150.00]]],
+        ['ItemCode'=>'SVC004','ItemName'=>'Annual Maintenance',   'ItemType'=>'itLabor', 'OnHand'=>0,  'ItemPrices'=>[['Price'=>1200.00]]],
+        ['ItemCode'=>'OFF001','ItemName'=>'Office Chair Ergo',    'ItemType'=>'itItems', 'OnHand'=>15, 'ItemPrices'=>[['Price'=>299.00]]],
+        ['ItemCode'=>'OFF002','ItemName'=>'Standing Desk',        'ItemType'=>'itItems', 'OnHand'=>7,  'ItemPrices'=>[['Price'=>599.00]]],
+        ['ItemCode'=>'OFF003','ItemName'=>'Whiteboard 120x90',    'ItemType'=>'itItems', 'OnHand'=>3,  'ItemPrices'=>[['Price'=>199.00]]],
+    ];
+}
+
+function mockStockLevels(): array
+{
+    $warehouses = ['01' => 'Main Warehouse', '02' => 'Branch Warehouse'];
+    $items = [
+        ['ItemCode'=>'LPT001','ItemName'=>'Laptop Pro 15"',        'InStock'=>45,'Committed'=>10,'OnOrder'=>20],
+        ['ItemCode'=>'LPT002','ItemName'=>'Laptop Business 13"',   'InStock'=>12,'Committed'=>3, 'OnOrder'=>10],
+        ['ItemCode'=>'MON001','ItemName'=>'Monitor 27" 4K',        'InStock'=>30,'Committed'=>5, 'OnOrder'=>15],
+        ['ItemCode'=>'KEY001','ItemName'=>'Wireless Keyboard',     'InStock'=>80,'Committed'=>12,'OnOrder'=>0],
+        ['ItemCode'=>'MSE001','ItemName'=>'Wireless Mouse',        'InStock'=>65,'Committed'=>8, 'OnOrder'=>0],
+        ['ItemCode'=>'PRN001','ItemName'=>'Laser Printer A4',      'InStock'=>8, 'Committed'=>2, 'OnOrder'=>5],
+        ['ItemCode'=>'SWT001','ItemName'=>'Network Switch 24-port','InStock'=>5, 'Committed'=>1, 'OnOrder'=>10],
+        ['ItemCode'=>'CAB001','ItemName'=>'USB-C Cable 2m',        'InStock'=>200,'Committed'=>30,'OnOrder'=>0],
+        ['ItemCode'=>'HDK001','ItemName'=>'External HDD 2TB',      'InStock'=>22,'Committed'=>4, 'OnOrder'=>0],
+        ['ItemCode'=>'WEB001','ItemName'=>'Webcam 4K',             'InStock'=>0, 'Committed'=>0, 'OnOrder'=>15],
+        ['ItemCode'=>'OFF001','ItemName'=>'Office Chair Ergo',     'InStock'=>15,'Committed'=>2, 'OnOrder'=>0],
+        ['ItemCode'=>'OFF002','ItemName'=>'Standing Desk',         'InStock'=>7, 'Committed'=>3, 'OnOrder'=>5],
+        ['ItemCode'=>'OFF003','ItemName'=>'Whiteboard 120x90',     'InStock'=>3, 'Committed'=>1, 'OnOrder'=>0],
+    ];
+
+    $result = [];
+    foreach ($items as $i) {
+        foreach ($warehouses as $whCode => $whName) {
+            $factor = $whCode === '01' ? 1 : 0.3;
+            $result[] = [
+                'ItemCode'      => $i['ItemCode'],
+                'ItemName'      => $i['ItemName'],
+                'WarehouseCode' => $whCode,
+                'InStock'       => round($i['InStock'] * $factor),
+                'Committed'     => round($i['Committed'] * $factor),
+                'OnOrder'       => round($i['OnOrder'] * $factor),
+            ];
+        }
+    }
+    return $result;
 }

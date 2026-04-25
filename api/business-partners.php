@@ -10,6 +10,32 @@ $sap    = new SapServiceLayer($cfg['sap']);
 $action = $_GET['action'] ?? 'list';
 
 try {
+    // Select2 AJAX format: ?action=select2&q=...&type=C
+    if ($action === 'select2') {
+        $q    = trim($_GET['q'] ?? '');
+        $type = $_GET['type'] ?? 'C'; // C=customer default
+        $filters = ["Active eq 'tYES'", "CardType eq '{$type}'"];
+        if ($q) {
+            $s = str_replace("'","''",$q);
+            $filters[] = "(contains(tolower(CardCode),tolower('{$s}')) or contains(tolower(CardName),tolower('{$s}')))";
+        }
+        $qs = http_build_query([
+            '$select'  => 'CardCode,CardName,CardType',
+            '$filter'  => implode(' and ', $filters),
+            '$orderby' => 'CardName asc',
+            '$top'     => 40,
+        ]);
+        $rows = $sap->callRaw('GET', '/BusinessPartners?'.$qs)['value'] ?? [];
+        $results = array_map(fn($r) => [
+            'id'        => $r['CardCode'],
+            'text'      => $r['CardCode'] . ' — ' . $r['CardName'],
+            'card_code' => $r['CardCode'],
+            'card_name' => $r['CardName'],
+        ], $rows);
+        echo json_encode(['results' => $results]);
+        exit;
+    }
+
     if ($action === 'list') {
         $search = trim($_GET['q'] ?? '');
         $type   = $_GET['type'] ?? ''; // C=customer, S=supplier

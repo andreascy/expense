@@ -946,6 +946,24 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 /* ── Nav group label ─────────────────────────────────────────────────────── */
 .nav-group-sep { height: 1px; background: var(--border); margin: .5rem 0; }
 
+.nav-group-label {
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-3);
+    padding: .9rem .5rem .2rem;
+    margin-top: .25rem;
+}
+.nav-group-label:first-child { padding-top: .25rem; }
+
+.btn-xs {
+    font-size: .72rem;
+    padding: .2rem .5rem;
+    border-radius: 5px;
+    line-height: 1.4;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1199px) {
     .sidebar { transform: translateX(-100%); }

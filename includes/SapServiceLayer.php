@@ -116,6 +116,30 @@ class SapServiceLayer
         return $this->callWithRetry('POST', '/JournalEntries', $payload);
     }
 
+    /**
+     * Search items (products/services).
+     * Returns array of { ItemCode, ItemName, ItemType, ItemsGroupCode, OnHand, Price }
+     */
+    public function getItems(string $search = '', int $limit = 60): array
+    {
+        $this->ensureSession();
+
+        $filters = ["Valid eq 'tYES'"];
+        if ($search !== '') {
+            $s = str_replace("'", "''", $search);
+            $filters[] = "(contains(tolower(ItemCode),tolower('{$s}')) or contains(tolower(ItemName),tolower('{$s}')))";
+        }
+
+        $qs = http_build_query([
+            '$select'  => 'ItemCode,ItemName,ItemType,OnHand,ItemPrices',
+            '$filter'  => implode(' and ', $filters),
+            '$orderby' => 'ItemCode asc',
+            '$top'     => $limit,
+        ]);
+
+        return $this->callWithRetry('GET', '/Items?' . $qs)['value'] ?? [];
+    }
+
     public function callRaw(string $method, string $endpoint, array $data = []): array
     {
         $this->ensureSession();

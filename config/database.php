@@ -133,6 +133,61 @@ function initSqlite(PDO $pdo): void
             created_by    INTEGER,
             created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS sales_documents (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            type          TEXT    NOT NULL,
+            doc_date      TEXT    NOT NULL,
+            due_date      TEXT    NOT NULL DEFAULT '',
+            card_code     TEXT    NOT NULL DEFAULT '',
+            card_name     TEXT    NOT NULL DEFAULT '',
+            memo          TEXT    NOT NULL DEFAULT '',
+            total         REAL    NOT NULL DEFAULT 0,
+            tax_total     REAL    NOT NULL DEFAULT 0,
+            sap_doc_entry INTEGER,
+            sap_doc_num   INTEGER,
+            status        TEXT    NOT NULL DEFAULT 'draft',
+            error_message TEXT,
+            linked_to     INTEGER,
+            lines_json    TEXT    NOT NULL DEFAULT '[]',
+            created_by    INTEGER,
+            created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS incoming_payments (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            payment_date         TEXT    NOT NULL,
+            card_code            TEXT    NOT NULL DEFAULT '',
+            card_name            TEXT    NOT NULL DEFAULT '',
+            amount               REAL    NOT NULL DEFAULT 0,
+            payment_method       TEXT    NOT NULL DEFAULT 'transfer',
+            bank_account         TEXT    NOT NULL DEFAULT '',
+            transfer_ref         TEXT    NOT NULL DEFAULT '',
+            memo                 TEXT    NOT NULL DEFAULT '',
+            invoice_id           INTEGER,
+            sap_invoice_doc_entry INTEGER,
+            sap_doc_entry        INTEGER,
+            sap_doc_num          INTEGER,
+            status               TEXT    NOT NULL DEFAULT 'draft',
+            error_message        TEXT,
+            created_by           INTEGER,
+            created_at           TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS items (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_code    TEXT    UNIQUE NOT NULL,
+            item_name    TEXT    NOT NULL DEFAULT '',
+            item_type    TEXT    NOT NULL DEFAULT 'itItems',
+            price        REAL    NOT NULL DEFAULT 0,
+            currency     TEXT    NOT NULL DEFAULT 'EUR',
+            unit         TEXT    NOT NULL DEFAULT 'EA',
+            stock_qty    REAL    NOT NULL DEFAULT 0,
+            active       INTEGER NOT NULL DEFAULT 1,
+            sap_synced   INTEGER NOT NULL DEFAULT 0,
+            created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
     ");
 
     // Seed default admin if no users exist
