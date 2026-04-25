@@ -1,9 +1,7 @@
 <?php $pageTitle = $pageTitle ?? 'Dashboard'; ?>
 <header class="topbar">
     <div class="topbar-left">
-        <button class="topbar-toggle d-xl-none" id="sidebarToggle">
-            <i class="bi bi-list"></i>
-        </button>
+        <button class="topbar-toggle d-xl-none" id="sidebarToggle"><i class="bi bi-list"></i></button>
         <div class="topbar-title">
             <h1><?= htmlspecialchars($pageTitle) ?></h1>
             <?php if (!empty($pageSubtitle)): ?>
@@ -12,8 +10,9 @@
         </div>
     </div>
     <div class="topbar-right">
-        <?php if (!empty($topbarActions)): ?>
-            <?= $topbarActions ?>
-        <?php endif; ?>
+        <?php if (!empty($topbarActions)) echo $topbarActions; ?>
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+            <i class="bi bi-sun" id="themeIcon"></i>
+        </button>
     </div>
 </header>

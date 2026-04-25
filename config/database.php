@@ -47,12 +47,13 @@ function getAppConfig(): array
     try {
         $rows = getDb()->query("SELECT key, value FROM settings")->fetchAll(PDO::FETCH_KEY_PAIR);
         $map = [
-            'SAP_BASE_URL'   => ['sap', 'base_url'],
-            'SAP_COMPANY_DB' => ['sap', 'company_db'],
-            'SAP_USERNAME'   => ['sap', 'username'],
-            'SAP_PASSWORD'   => ['sap', 'password'],
-            'APP_CURRENCY'   => ['app', 'currency'],
-            'APP_COMPANY'    => ['app', 'company_name'],
+            'SAP_BASE_URL'        => ['sap', 'base_url'],
+            'SAP_COMPANY_DB'      => ['sap', 'company_db'],
+            'SAP_USERNAME'        => ['sap', 'username'],
+            'SAP_PASSWORD'        => ['sap', 'password'],
+            'APP_CURRENCY'        => ['app', 'currency'],
+            'APP_COMPANY'         => ['app', 'company_name'],
+            'COMPANY_CRYSTAL_URL' => ['app', 'crystal_url'],
         ];
         foreach ($map as $k => [$section, $field]) {
             if (!empty($rows[$k])) $base[$section][$field] = $rows[$k];
@@ -116,6 +117,21 @@ function initSqlite(PDO $pdo): void
             category     TEXT NOT NULL,
             sort_order   INTEGER NOT NULL DEFAULT 0,
             created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_date   TEXT    NOT NULL,
+            memo         TEXT    NOT NULL DEFAULT '',
+            ref1         TEXT    NOT NULL DEFAULT '',
+            ref2         TEXT    NOT NULL DEFAULT '',
+            sap_doc_entry INTEGER,
+            sap_doc_num   INTEGER,
+            status        TEXT    NOT NULL DEFAULT 'pending',
+            error_message TEXT,
+            lines_json    TEXT    NOT NULL DEFAULT '[]',
+            created_by    INTEGER,
+            created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
         );
     ");
 

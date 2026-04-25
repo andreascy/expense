@@ -116,6 +116,12 @@ class SapServiceLayer
         return $this->callWithRetry('POST', '/JournalEntries', $payload);
     }
 
+    public function callRaw(string $method, string $endpoint, array $data = []): array
+    {
+        $this->ensureSession();
+        return $this->callWithRetry($method, $endpoint, $data);
+    }
+
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
